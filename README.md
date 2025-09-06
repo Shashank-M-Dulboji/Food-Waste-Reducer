@@ -18,6 +18,6 @@ The goal is to minimize food waste by redistributing surplus food to communities
 - **Frontend:** HTML, CSS, JavaScript  
 - **Backend:** javascript  
 - **Database:** Firebase  
-- **Hosting:** 
+- **Hosting:** Netlify
 
 ---
