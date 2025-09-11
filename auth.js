@@ -2,19 +2,14 @@ import { auth } from './firebase.js';
 import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import { createUserProfile, getUserRole } from './firestore.js';
 
-let donationsUnsubscribe = null;
-
 export function initAuth(onLogin, onLogout) {
     onAuthStateChanged(auth, async (user) => {
-        if (donationsUnsubscribe) {
-            donationsUnsubscribe();
-            donationsUnsubscribe = null;
-        }
         if (user) {
             try {
                 const role = await getUserRole(user);
-                donationsUnsubscribe = onLogin(user, role);
-            } catch {
+                onLogin(user, role);
+            } catch (error) {
+                console.error("Auth init error:", error);
                 onLogout();
             }
         } else {

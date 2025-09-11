@@ -3,66 +3,90 @@ import { listenToDonations, addDonation, claimDonation, listenToClaimedDonations
 import * as ui from './ui.js';
 
 let currentUser = null;
-let userRole = null;
-let claimedDonationsUnsubscribe = null;
+
+// Page-specific logic
+document.addEventListener('DOMContentLoaded', () => {
+    initAuth(onLogin, onLogout);
+    const path = window.location.pathname;
+
+    if (path === '/' || path.endsWith('/index.html')) {
+        // Auth forms
+        document.getElementById('show-signup').addEventListener('click', () => ui.toggleAuthForms(true));
+        document.getElementById('show-login').addEventListener('click', () => ui.toggleAuthForms(false));
+        document.getElementById('login-form').addEventListener('submit', handleAuthForm(handleLogin));
+        document.getElementById('signup-form').addEventListener('submit', handleAuthForm(handleSignup, true));
+    } else {
+        // App pages
+        document.getElementById('logout-btn').addEventListener('click', handleLogout);
+        document.addEventListener('click', handleActionButtons);
+    }
+
+    if (path.endsWith('/donor.html')) {
+        document.getElementById('add-donation-btn').addEventListener('click', () => ui.showDonationModal(true));
+        document.getElementById('cancel-btn').addEventListener('click', () => ui.showDonationModal(false));
+        document.getElementById('donation-form').addEventListener('submit', handleDonationSubmit);
+    }
+    
+    if (path.endsWith('/recipient.html')) {
+        const searchInput = document.getElementById('search-location');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => ui.filterDonationsByLocation(e.target.value));
+        }
+    }
+});
 
 function onLogin(user, role) {
     currentUser = user;
-    userRole = role;
-    ui.showAppView(user, role);
+    ui.updateUserInfo(user);
+    
+    const path = window.location.pathname;
 
-    if (role === 'recipient') {
-        if (claimedDonationsUnsubscribe) claimedDonationsUnsubscribe();
-        claimedDonationsUnsubscribe = listenToClaimedDonations(user, (donations) => {
-            ui.renderDonations(donations, role, 'my-receivings-list');
-        });
+    if (role === 'donor' && !path.endsWith('/donor.html')) {
+        window.location.href = '/donor.html';
+    } else if (role === 'recipient' && (!path.endsWith('/recipient.html') && !path.endsWith('/myreceivings.html'))) {
+        window.location.href = '/recipient.html';
     }
 
-    return listenToDonations(user, role, (donations) => {
-        const listId = role === 'donor' ? 'donor-donations-list' : 'recipient-donations-list';
-        ui.renderDonations(donations, role, listId);
-    });
+    if (role === 'donor' && path.endsWith('/donor.html')) {
+        listenToDonations(user, role, donations => ui.renderDonations(donations, role, 'donor-donations-list'));
+    } else if (role === 'recipient') {
+        if (path.endsWith('/recipient.html')) {
+            listenToDonations(user, role, donations => ui.renderDonations(donations, role, 'recipient-donations-list'));
+        }
+        if (path.endsWith('/myreceivings.html')) {
+            listenToClaimedDonations(user, donations => ui.renderDonations(donations, role, 'my-receivings-list'));
+        }
+    }
 }
 
 function onLogout() {
     currentUser = null;
-    userRole = null;
-    ui.showLoginView();
-    if (claimedDonationsUnsubscribe) {
-        claimedDonationsUnsubscribe();
-        claimedDonationsUnsubscribe = null;
+    const path = window.location.pathname;
+    if (path !== '/' && !path.endsWith('/index.html')) {
+        window.location.href = '/';
     }
 }
 
-initAuth(onLogin, onLogout);
+function handleAuthForm(authFunction, isSignup = false) {
+    return async (e) => {
+        e.preventDefault();
+        const email = e.target.querySelector('input[type="email"]').value;
+        const password = e.target.querySelector('input[type="password"]').value;
+        try {
+            if (isSignup) {
+                const role = e.target.querySelector('input[name="role"]:checked').value;
+                await authFunction(email, password, role);
+            } else {
+                await authFunction(email, password);
+            }
+            e.target.reset();
+        } catch (error) {
+            ui.showMessage('Error', error.message, 'error');
+        }
+    };
+}
 
-// Event listeners
-document.getElementById('show-signup').addEventListener('click', () => ui.toggleAuthForms(true));
-document.getElementById('show-login').addEventListener('click', () => ui.toggleAuthForms(false));
-
-document.getElementById('login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    try { await handleLogin(email, password); e.target.reset(); } 
-    catch (error) { ui.showMessage('Error', error.message, 'error'); }
-});
-
-document.getElementById('signup-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('signup-email').value;
-    const password = document.getElementById('signup-password').value;
-    const role = e.target.querySelector('input[name="role"]:checked').value;
-    try { await handleSignup(email, password, role); e.target.reset(); } 
-    catch (error) { ui.showMessage('Error', error.message, 'error'); }
-});
-
-document.getElementById('logout-btn').addEventListener('click', handleLogout);
-
-document.getElementById('add-donation-btn').addEventListener('click', () => ui.showDonationModal(true));
-document.getElementById('cancel-btn').addEventListener('click', () => ui.showDonationModal(false));
-
-document.getElementById('donation-form').addEventListener('submit', async (e) => {
+async function handleDonationSubmit(e) {
     e.preventDefault();
     const donationData = {
         foodName: document.getElementById('food-name').value,
@@ -77,21 +101,9 @@ document.getElementById('donation-form').addEventListener('submit', async (e) =>
     } catch (error) {
         ui.showMessage('Error', error.message, 'error');
     }
-});
-
-// Recipient tabs (safe check)
-const tabs = document.getElementById('recipient-tabs');
-if (tabs) {
-    tabs.addEventListener('click', (e) => {
-        if (e.target.classList.contains('recipient-tab')) {
-            const showAvailable = e.target.dataset.target === 'available-donations-view';
-            ui.toggleRecipientViews(showAvailable);
-        }
-    });
 }
 
-// Claim / Delete
-document.addEventListener('click', async (e) => {
+async function handleActionButtons(e) {
     const claimBtn = e.target.closest('.claim-btn');
     const deleteBtn = e.target.closest('.delete-btn');
 
@@ -118,14 +130,4 @@ document.addEventListener('click', async (e) => {
             }
         }
     }
-});
-
-// Search
-document.getElementById('search-location').addEventListener('input', (e) => {
-    const searchTerm = e.target.value.toLowerCase();
-    const donationCards = document.querySelectorAll('#recipient-donations-list .donation-card');
-    donationCards.forEach(card => {
-        const address = (card.dataset.address || "").toLowerCase();
-        card.style.display = address.includes(searchTerm) ? 'flex' : 'none';
-    });
-});
+}

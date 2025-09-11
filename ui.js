@@ -1,42 +1,15 @@
-// --- DOM ELEMENTS ---
-const authContainer = document.getElementById('auth-container');
-const appContainer = document.getElementById('app-container');
-const loginView = document.getElementById('login-view');
-const signupView = document.getElementById('signup-view');
-const userEmailSpan = document.getElementById('user-email');
-const donorView = document.getElementById('donor-view');
-const recipientView = document.getElementById('recipient-view');
-const messageModal = document.getElementById('message-modal');
-const donationModal = document.getElementById('donation-modal');
-const donationForm = document.getElementById('donation-form');
-// Recipient view elements
-const recipientTabs = document.getElementById('recipient-tabs');
-const availableDonationsView = document.getElementById('available-donations-view');
-const myReceivingsView = document.getElementById('my-receivings-view');
-
 // --- UI LOGIC ---
 
-export function showLoginView() {
-    appContainer.classList.add('hidden');
-    authContainer.classList.remove('hidden');
-}
-
-export function showAppView(user, role) {
-    authContainer.classList.add('hidden');
-    appContainer.classList.remove('hidden');
-    userEmailSpan.textContent = user.email;
-
-    if (role === 'donor') {
-        donorView.classList.remove('hidden');
-        recipientView.classList.add('hidden');
-    } else {
-        recipientView.classList.remove('hidden');
-        donorView.classList.add('hidden');
-        toggleRecipientViews(true); 
+export function updateUserInfo(user) {
+    const userEmailSpan = document.getElementById('user-email');
+    if (userEmailSpan) {
+        userEmailSpan.textContent = user.email;
     }
 }
 
 export function toggleAuthForms(showSignup) {
+    const loginView = document.getElementById('login-view');
+    const signupView = document.getElementById('signup-view');
     if (showSignup) {
         loginView.classList.add('hidden');
         signupView.classList.remove('hidden');
@@ -46,22 +19,10 @@ export function toggleAuthForms(showSignup) {
     }
 }
 
-export function toggleRecipientViews(showAvailable) {
-    const availableTab = recipientTabs.querySelector('[data-target="available-donations-view"]');
-    const receivingsTab = recipientTabs.querySelector('[data-target="my-receivings-view"]');
-
-    availableTab.classList.toggle('tab-active', showAvailable);
-    availableTab.classList.toggle('text-gray-500', !showAvailable);
-    
-    receivingsTab.classList.toggle('tab-active', !showAvailable);
-    receivingsTab.classList.toggle('text-gray-500', showAvailable);
-    
-    availableDonationsView.classList.toggle('hidden', !showAvailable);
-    myReceivingsView.classList.toggle('hidden', showAvailable);
-}
-
 export function renderDonations(donations, userRole, listId) {
     const list = document.getElementById(listId);
+    if (!list) return;
+
     list.innerHTML = '';
     if (!donations || donations.length === 0) {
         list.innerHTML = `<p class="text-gray-500 p-4 col-span-full">No donations to show right now.</p>`;
@@ -87,18 +48,12 @@ function createDonationCard(id, data, userRole, listId) {
     let actionButton = '';
     let deleteButton = '';
     
-    // Claim button for recipients
     if (userRole === 'recipient' && data.status === 'available') {
         actionButton = `<button data-id="${id}" class="claim-btn mt-4 w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg">Claim Food</button>`;
     }
     
-    // Delete button for donors OR recipients (only in My Receivings)
     if (userRole === 'donor' || (userRole === 'recipient' && listId === 'my-receivings-list')) {
-        deleteButton = `
-            <button data-id="${id}" class="delete-btn absolute bottom-4 right-4 text-gray-400 hover:text-red-500 transition-colors">
-                <i class="fas fa-trash-alt fa-lg"></i>
-            </button>
-        `;
+        deleteButton = `<button data-id="${id}" class="delete-btn absolute bottom-4 right-4 text-gray-400 hover:text-red-500 transition-colors"><i class="fas fa-trash-alt fa-lg"></i></button>`;
     }
 
     const phoneInfo = (userRole === 'recipient' || data.status === 'claimed') 
@@ -117,24 +72,24 @@ function createDonationCard(id, data, userRole, listId) {
             <p class="text-xs text-gray-400 mt-4">Listed: ${readableDate}</p>
             ${data.status === 'claimed' ? `<p class="text-xs text-yellow-600 mt-1 font-semibold">Claimed by: ${data.recipientEmail || 'N/A'}</p>` : ''}
         </div>
-        <div class="pt-8"> 
-             ${actionButton}
-        </div>
+        <div class="pt-8">${actionButton}</div>
         ${deleteButton}
     `;
     return card;
 }
 
 export function showDonationModal(show) {
+    const donationModal = document.getElementById('donation-modal');
     if (show) {
         donationModal.classList.remove('hidden');
     } else {
-        donationForm.reset();
+        document.getElementById('donation-form').reset();
         donationModal.classList.add('hidden');
     }
 }
 
 export function showMessage(title, text, type = 'success') {
+    const messageModal = document.getElementById('message-modal');
     const messageTitle = document.getElementById('message-title');
     const messageText = document.getElementById('message-text');
     const messageIcon = document.getElementById('message-icon');
@@ -154,4 +109,13 @@ export function showMessage(title, text, type = 'success') {
         messageOkBtn.removeEventListener('click', okListener);
     };
     messageOkBtn.addEventListener('click', okListener);
+}
+
+export function filterDonationsByLocation(searchTerm) {
+    const term = searchTerm.toLowerCase();
+    const donationCards = document.querySelectorAll('#recipient-donations-list .donation-card');
+    donationCards.forEach(card => {
+        const address = (card.dataset.address || "").toLowerCase();
+        card.style.display = address.includes(term) ? 'flex' : 'none';
+    });
 }
